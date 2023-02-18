@@ -1,0 +1,8 @@
+absl-py==1.4.0
+autopep8==2.0.1
+numpy==1.24.2
+ortools==9.5.2237
+protobuf==4.21.12
+PuLP==2.7.0
+pycodestyle==2.10.0
+tomli==2.0.1
