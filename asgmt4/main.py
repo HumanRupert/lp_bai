@@ -2,6 +2,7 @@
 
 import typing
 import logging
+import math
 
 import numpy as np
 import cvxpy as cp
@@ -131,10 +132,9 @@ def _post_process(
             continue
         e.value[ix] = e_batt_max
 
-        if p_mg.value[ix - 1] >= 0:
-            new_mg = (e.value[ix - 1] - e_batt_max) / (1 + eta)
-        if p_mg.value[ix - 1] < 0:
-            new_mg = (e.value[ix - 1] - e_batt_max) / (1 - eta)
+        new_mg = (e.value[ix - 1] - e_batt_max) / (
+            1 + math.copysign(eta, p_mg.value[ix - 1])
+        )
 
         mg = p_mg.value[ix - 1]
         delta = new_mg - mg
