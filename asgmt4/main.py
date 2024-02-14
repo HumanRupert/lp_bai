@@ -1,4 +1,4 @@
-"""Two techniques are presented for consideration, namely post-processing the output of the solver and introducing an error term in the objective value. The approach yielding the highest precision is chosen, that is, post-processing. It is important to note that both methods adhere to the established error bounds."""
+"""I introduce two techniques that can be used for solving the problem, namely post-processing the solution for the relaxation and introducing a penalty term in the objective value. The approach that provides the highest precision, i.e., post-processing, is chosen after consideration. Both techniques comply with the predetermined error bounds. An argument is presented to prove that the relaxed version is equivalent to the original problem."""
 
 import typing
 import logging
@@ -6,7 +6,6 @@ import math
 
 import numpy as np
 import cvxpy as cp
-from matplotlib import pyplot as plt
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -49,7 +48,18 @@ def _solve(
 
     Notes
     ----------
-    In the initial scenario, the equation E(t+1) = E(t) - Pmg(t) - η|Pmg(t)| applies for t values ranging from 1 to T. However, in DCP, it is not feasible to establish a lower boundary for the distance (as the feasible region is not convex), which results in the relaxation of the constraint to an inequality. It is worth noting that any objective value attained from the original problem can also be reached by the relaxed problem, and vice versa. In order to transform any optimal feasible solution derived from the relaxed problem to a feasible solution of the initial problem, check the "_post_process" function.
+    In the original scenario, the equation E(t+1) = E(t) - Pmg(t) - η|Pmg(t)| applies for t values ranging from 1 to T. However, in DCP, it is not feasible to establish a lower boundary for absolute value (as the feasible region is not convex), which results in the relaxation of the constraint to an inequality.
+
+    On The Equivalence of the Relaxed Version
+    ----------
+    Let
+        A be the feasible region to the relaxed problem
+        B be the feasible region to the original problem
+        g the convex function to be minimized
+
+    It is observed that B is a subset of A, therefore, the minimum of g over B is greater than or equal to the minimum of g over A. This implies that the optimal solution for the relaxed problem provides a lower bound for the optimal value of the original problem.
+
+    Furthermore, for all x_*, optimal feasible solution in A, exists y_*, feasible solution in B that has the same objective value (see the `_post_process` function). Such y_*, then, by the previous point, is an optimal solution to the original problem.
 
     Parameters
     ----------
@@ -107,11 +117,11 @@ def _post_process(
     e: cp.Variable,
     e_batt_max: float,
 ):
-    """Post processes the solver output so the constraints have no slack and are all satisfied tightly.
+    """Post processes the solver output so the solution is feasible for the original problem.
 
     Notes
     ----------
-    First, the energy conservation constraints are established as an equality, ensuring that all power is transferred to the battery. In case the battery level surpasses the `e_batt_max` threshold, the `p_mg` variable is subjected to mutation such that `e` is set to `e_batt_max`. To maintain the objective value, the car brake is utilized, causing `p_br` to change with the same magnitude of change in `p_mg`.
+    First, the equality constraints for energy conservation are set up to guarantee that all power is transmitted to the battery. If the battery charge exceeds the maximum threshold value of `e_batt_max`, then the `p_mg` variable undergoes mutation, resulting in the value of `e` being assigned as `e_batt_max`. The car brake is utilized to maintain the objective value by causing `p_br` to change with the same extent of change in `p_mg`. The revised solution is both feasible and optimal for the original problem and has the same objective value as the relaxed optimal.
 
     Parameters
     ----------
@@ -181,11 +191,12 @@ def _check_for_glitch(
         )
 
     logging.info(
-        f"Objective and constraint errors are within bound. \n Objective error: {obj_err} \n Constraint error: {const_err}"
+        f"Objective and constraint errors are within bound. \n Objective error: {obj_err} \n Constraint error: {const_err} \n Objective Value: {new_obj}"
     )
 
 
 def solve_car_cp_pp(e_batt_max: float) -> typing.Dict[str, typing.List[float]]:
+    logger.info("\n\n -----USING POST-PROCESSING----- \n\n ")
     prob, p_eng, p_mg, p_br, e = _solve(e_batt_max)
     prev_obj = prob.objective.value
     _post_process(p_eng, p_mg, p_br, e, e_batt_max)
@@ -197,7 +208,7 @@ def solve_car_cp_pp(e_batt_max: float) -> typing.Dict[str, typing.List[float]]:
 def solve_car_cp_eps(
     e_batt_max: float, eps: float, no_eps_obj: float
 ) -> typing.Tuple[typing.Dict[str, typing.List[float]], float]:
-    """As an alternative to the post-processing approach, a penalty term is incorporated into the objective function to deter the motor/generator from absorbing power if it is not utilized for recharging the battery.
+    """Instead of using a post-processing approach, the objective function now includes a penalty term to discourage the motor/generator from producing power that won't be absorbed in the battery. However, this solution is only valid within the error bounds if the solver ECOS is employed. Refer to the following link for more information: https://github.com/embotech/ecos.
 
     Parameters
     ----------
@@ -213,6 +224,7 @@ def solve_car_cp_eps(
     `typing.Tuple[typing.Dict[str, typing.List[float]], float]`
         retval, prob.objective.value
     """
+    logger.info("\n\n -----USING EPSILON----- \n\n")
     prob, p_eng, p_mg, p_br, e = _solve(e_batt_max, eps)
     _check_for_glitch(e, p_mg, prob.objective.value, no_eps_obj)
     retval = _propagate_retval(e, p_eng, p_mg, p_br)
